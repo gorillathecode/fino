@@ -1,73 +1,80 @@
-# FINO – Finanz-Copilot für Freelancer
+# FINO
+### A financial overview for freelancers
 
-Mobile App (React Native + Expo). Verbindet Konten, teilt Zahlungseingänge automatisch auf, zeigt die **Real Balance** und gibt Copilot-Hinweise.
+A personal **React Native / Expo prototype** that brings accounts, invoices and configurable reserves into one interface. The central idea is **Real Balance**: an overview of the balance remaining after the user's tax and fixed-cost reserve rules.
 
-## Was die App kann (MVP)
+**Stack:** TypeScript · React Native · Expo Router · Zustand · Supabase · Tink · Claude
 
-- **Onboarding**: Willkommen, Konto verbinden (Sandbox), Steuer-/Fixkostenregeln einstellen
-- **Dashboard**: Real Balance prominent, Töpfe (Steuer, Fixkosten), Copilot-Warnungen, letzte Bewegungen
-- **Rechnungen**: Liste mit Status (Bezahlt/Fällig/Überfällig), Filter, neue Rechnung erstellen
-- **Konten**: Verbundene Banken, Gesamtsaldo, weiteres Konto verbinden
-- **Copilot**: Chat der "Kann ich mir X leisten?" beantwortet (regelbasiert, später echtes LLM)
+**Status:** product prototype with demo data and integration code. Bank connectivity depends on external configuration and sandbox access; this repository does not establish production banking readiness. Reserve amounts are planning estimates, not transfers to separate accounts or a calculation of actual tax liability.
 
-## Setup
+## Explore the implementation
 
-Voraussetzung: Node.js 18+ und npm.
+| Area | Entry point |
+| --- | --- |
+| Dashboard and financial overview | [app/(tabs)/dashboard.tsx](app/%28tabs%29/dashboard.tsx) |
+| State, reserve calculations and persistence calls | [store/useFinoStore.ts](store/useFinoStore.ts) |
+| Bank-link callback, token exchange and account mapping | [services/tink.ts](services/tink.ts) |
+| Authenticated server-side token exchange and refresh-token encryption | [supabase/functions/tink-token-exchange/index.ts](supabase/functions/tink-token-exchange/index.ts) |
+| AI copilot endpoint | [supabase/functions/copilot-chat/index.ts](supabase/functions/copilot-chat/index.ts) |
+| Invoice PDF generation | [services/generateInvoicePdf.ts](services/generateInvoicePdf.ts) |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    UI["Expo / React Native screens"] --> Store["Zustand state and reserve calculations"]
+    Store --> Demo["Demo accounts and transactions"]
+    Store --> SB["Supabase Auth and database"]
+    UI --> Link["Tink Link / app callback"]
+    Link --> Client["Tink client service"]
+    Client --> Exchange["Supabase Edge Function: token exchange"]
+    Exchange --> Tink["Tink OAuth"]
+    Client --> Data["Tink accounts / transactions API"]
+    UI --> Chat["Supabase Edge Function: copilot"]
+    Chat --> Claude["Claude API"]
+```
+
+The client opens the bank-link flow; the OAuth client secret belongs on the server. The token-exchange function checks the user and encrypts refresh tokens before storage. The copilot receives the financial context supplied by the client; it is a conversational interface, not a payment execution system.
+
+## My contribution
+
+This is my own product-development project: a freelancer-focused workflow combining mobile screens, shared application state, Supabase integration, bank-link handling and server-side AI integration. The links above make the implementation inspectable. External APIs and libraries provide the underlying banking, authentication and model services.
+
+## Product walkthrough
+
+1. Sign in and configure tax/fixed-cost reserve percentages.
+2. Open the dashboard to inspect the balance, reserves and recent movements.
+3. Browse accounts and invoices; open an invoice and its PDF workflow.
+4. Explore the copilot. Configured AI and banking features require their respective backend services.
+
+Without a completed bank connection, the store uses demo accounts and transactions. This is an explicit prototype fallback, not evidence of a live connection.
+
+## Run locally
+
+Use a Node.js version compatible with Expo SDK 54.
 
 ```bash
-# 1. Abhängigkeiten installieren
-npm install
-
-# 2. App starten
+npm ci
 npx expo start
 ```
 
-Dann:
-- **Auf dem Handy**: Expo Go App installieren (App Store / Play Store), QR-Code scannen
-- **iOS Simulator**: Taste `i` drücken (nur macOS mit Xcode)
-- **Android Emulator**: Taste `a` drücken (mit Android Studio)
-- **Browser**: Taste `w` drücken (schnellster Test)
+Use `w` for the web target, or an appropriately configured Android/iOS development environment. Configure your own Supabase environment for authenticated flows; do not use real financial data for portfolio demonstrations.
 
-## Projektstruktur
+See [Tink integration](TINK_INTEGRATION.md) and [Tink testing notes](TINK_TESTING.md) for the banking setup. These are implementation/setup notes, not a claim that automated or live integration tests have passed.
 
-```
-fino-app/
-├── app/                      # Screens (expo-router, file-based routing)
-│   ├── _layout.tsx           # Root Stack
-│   ├── index.tsx             # Redirect (Onboarding oder Tabs)
-│   ├── onboarding.tsx        # 3-Schritt Onboarding
-│   └── (tabs)/
-│       ├── _layout.tsx       # Tab Navigator
-│       ├── dashboard.tsx     # Hauptscreen mit Real Balance
-│       ├── invoices.tsx      # Rechnungen + Erstell-Modal
-│       ├── accounts.tsx      # Konten
-│       └── copilot.tsx       # Chat
-├── components/               # Card, Button, StatusBadge
-├── theme/                    # Design-System (Farben, Typo, Spacing)
-├── store/                    # Zustand State Management
-├── data/                     # Mock-Daten (ersetzbar durch Tink)
-└── utils/                    # formatEUR Helper
+## Project structure
+
+```text
+app/                  Expo Router screens
+components/           Shared interface components
+store/                State and financial overview calculations
+services/             Tink, PDF and notification integrations
+supabase/functions/   Server-side Tink exchange and AI copilot
+supabase/migrations/  Versioned database changes present in this repo
+data/                 Demo models and data
+theme/                Interface tokens
 ```
 
-## Real Balance Logik
+## Scope and limitations
 
-Die Kernformel in `store/useFinoStore.ts`:
-
-```
-Real Balance = Gesamtsaldo aller Konten
-             − Steuer-Rücklage (30% der Einnahmen)
-             − Fixkosten-Rücklage (20% der Einnahmen)
-```
-
-Die Prozentsätze sind im Onboarding einstellbar und in `rules` gespeichert.
-
-## Nächste Schritte
-
-1. **Echte Bankanbindung**: Mock-Daten durch Tink Sandbox ersetzen (siehe `TINK_INTEGRATION.md`)
-2. **Backend**: Supabase für Auth + Datenpersistenz
-3. **Echter Copilot**: Regelbasierte Antworten durch Claude API ersetzen
-4. **Push-Benachrichtigungen**: Für Copilot-Warnungen (überfällige Rechnungen etc.)
-
-## Design-System
-
-Strikt eingehalten in `theme/index.ts`. Farben: Navy `#0B1736`, Cyan `#10BFE8`, Türkis `#12D6C5`, Off-White `#F7FAFC`. Inter-Schrift, große Headlines, viel Whitespace.
+The current repository contains prototype calculations and configured-service integrations. It does not demonstrate audited accounting, tax advice, executed payments, regulatory approval or a production service. Authentication and database setup are needed for persisted user flows. Some database objects used by the client are not fully provisioned by the checked-in migrations.
